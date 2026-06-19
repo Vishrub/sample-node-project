@@ -5,50 +5,72 @@ pipeline {
     environment {
 
         IMAGE_NAME = "sample-node-app"
-
         CONTAINER_NAME = "sample-node"
 
     }
 
     stages {
 
-        stage('Clone') {
+        stage('Checkout') {
             steps {
-                echo "Repository already checked out by Jenkins"
+                checkout scm
             }
         }
 
-        stage('Build Image') {
+        stage('Install Dependencies') {
             steps {
-                sh '''
+                sh 'npm ci'
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                sh 'npm test'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh """
                 docker build \
+                -t ${IMAGE_NAME}:${BUILD_NUMBER} \
                 -t ${IMAGE_NAME}:latest .
-                '''
+                """
             }
         }
 
         stage('Deploy') {
             steps {
 
-                sh '''
+                sh """
                 docker rm -f ${CONTAINER_NAME} || true
 
                 docker run -d \
-                  --name ${CONTAINER_NAME} \
-                  -p 3000:3000 \
-                  ${IMAGE_NAME}:latest
-                '''
+                    --name ${CONTAINER_NAME} \
+                    -p 3000:3000 \
+                    ${IMAGE_NAME}:${BUILD_NUMBER}
+                """
             }
         }
 
-        stage('Verify') {
-
+        stage('Verify Deployment') {
             steps {
 
                 sh 'docker ps'
 
-            }
+                sh 'docker logs sample-node'
 
+            }
+        }
+
+        stage('Cleanup') {
+            steps {
+
+                sh '''
+                docker image prune -f
+                '''
+
+            }
         }
 
     }
